@@ -1,4 +1,4 @@
-<?php 
+<?php
 /**
  * "Abstract" class for a number of different payment
  * types allowing a user to pay for something on a site.
@@ -9,7 +9,7 @@
  *
  * This can't be an abstract class because sapphire doesn't
  * support abstract DataObject classes.
- * 
+ *
  * @package payment
  */
 class Payment extends DataObject {
@@ -28,20 +28,20 @@ class Payment extends DataObject {
 		'ProxyIP' => 'Varchar',
 		'PaidForID' => "Int",
 		'PaidForClass' => 'Varchar',
-		
-		//This is used only when the payment is one of the recurring payments, when a scheduler is trying to 
+
+		//This is used only when the payment is one of the recurring payments, when a scheduler is trying to
 		//find which is the latest one for the recurring payments
 		'PaymentDate' => "Date",
-		
+
 		//Usered for store any Exception during this payment Process.
 		'ExceptionError' => 'Text'
 	);
-	
+
 	public static $has_one = array(
 		'RecurringPayment' => 'RecurringPayment',
 		'PaidBy' => 'Member',
 	);
-	
+
 	/**
 	 * Instances of Payment supported (usable) on this site.
 	 * @var array
@@ -49,26 +49,26 @@ class Payment extends DataObject {
 	protected static $supported_methods = array(
 		'ChequePayment' => 'Cheque'
 	);
-	
-	
+
+
 	/**
 	 * Make payment table transactional.
 	 */
 	static $create_table_options = array(
 		'MySQLDatabase' => 'ENGINE=InnoDB'
 	);
-		
+
 	/**
 	 * The currency code used for payments.
 	 * @var string
 	 */
 	protected static $site_currency = 'USD';
-	
+
 	/**
 	 * the testable form of the payment method
 	 */
 	protected static $testable_form = array();
-	
+
 	/**
 	 * Set the currency code that this site uses.
 	 * @param string $currency Currency code. e.g. "NZD"
@@ -76,7 +76,7 @@ class Payment extends DataObject {
 	public static function set_site_currency($currency) {
 		self::$site_currency = $currency;
 	}
-	
+
 	/**
 	 * Return the site currency in use.
 	 * @return string
@@ -84,7 +84,7 @@ class Payment extends DataObject {
 	public static function site_currency() {
 		return self::$site_currency;
 	}
-	
+
 	/**
 	 * Set the payment types that this site supports.
 	 * The classes should all be subclasses of Payment.
@@ -94,14 +94,23 @@ class Payment extends DataObject {
 	static function set_supported_methods($methodMap) {
 		self::$supported_methods = $methodMap;
 	}
-	
+	/**
+	 * Get the payment types that this site supports.
+	 * The classes should all be subclasses of Payment.
+	 *
+	 * @return array $methodMap A map of class names to human-readable descriptions of the payment methods.
+	 */
+	static function get_supported_methods($methodMap) {
+		return self::$supported_methods;
+	}
+
 	function populateDefaults() {
 		parent::populateDefaults();
-		
+
 		$this->Amount->Currency = Payment::site_currency();
 		$this->setClientIP();
  	}
-	
+
 	/**
 	 * Set the IP address of the user to this payment record.
 	 * This isn't perfect - IP addresses can be hidden fairly easily.
@@ -109,21 +118,21 @@ class Payment extends DataObject {
 	function setClientIP() {
 		$proxy = null;
 		$ip = null;
-		
+
 		if(isset($_SERVER['HTTP_CLIENT_IP'])) $ip = $_SERVER['HTTP_CLIENT_IP'];
 		elseif(isset($_SERVER['REMOTE_ADDR'])) $ip = $_SERVER['REMOTE_ADDR'];
 		else $ip = null;
-		
+
 		if(isset($_SERVER['HTTP_X_FORWARDED_FOR'])) {
 			$proxy = $ip;
 			$ip = $_SERVER['HTTP_X_FORWARDED_FOR'];
 		}
-		
+
 		// Only set the IP and ProxyIP if none currently set
 		if(!$this->IP) $this->IP = $ip;
 		if(!$this->ProxyIP) $this->ProxyIP = $proxy;
 	}
-	
+
 	/**
 	 * Returns the Payment type currently in use.
 	 * @return string
@@ -133,12 +142,12 @@ class Payment extends DataObject {
 			return self::$supported_methods[$this->ClassName];
 		}
 	}
-	
+
 	/**
 	 * Return a set of payment fields from all enabled
 	 * payment methods for this site, given the . {@link Payment::set_supported_methods()}
 	 * is used to define which methods are available.
-	 * 
+	 *
 	 * @return FieldSet
 	 */
 	static function combined_form_fields($amount) {
@@ -154,38 +163,38 @@ class Payment extends DataObject {
 				array_shift(array_keys(self::$supported_methods))
 			)
 		);
-		
+
 		// If the user defined an numerically indexed array, throw an error
 		if(ArrayLib::is_associative(self::$supported_methods)) {
 			foreach(self::$supported_methods as $methodClass => $methodTitle) {
-				
+
 				// Create a new CompositeField with method specific fields,
 				// as defined on each payment method class using getPaymentFormFields()
 				$methodFields = new CompositeField(singleton($methodClass)->getPaymentFormFields());
 				$methodFields->setID("MethodFields_$methodClass");
 				$methodFields->addExtraClass('paymentfields');
-				
+
 				// Add those fields to the initial FieldSet we first created
 				$fields->push($methodFields);
 			}
 		} else {
 			user_error('Payment::set_supported_methods() requires an associative array.', E_USER_ERROR);
 		}
-		
+
 		// Add the amount and subtotal fields for the payment amount
 		$fields->push(new ReadonlyField('Amount', _t('Payment.AMOUNT', 'Amount'), $amount));
-		
+
 		return $fields;
 	}
-	
+
 	/**
 	 * Return the form requirements for all the payment methods.
-	 * 
+	 *
 	 * @return An array suitable for passing to CustomRequiredFields
 	 */
 	static function combined_form_requirements() {
 		$requirements = array();
-		
+
 		// Loop on available methods
 		foreach(self::$supported_methods as $method => $methodTitle) {
 			$methodRequirements = singleton($method)->getPaymentFormRequirements();
@@ -195,23 +204,23 @@ class Payment extends DataObject {
 					. "if(this.elements.PaymentMethod[i].value == '$method' && this.elements.PaymentMethod[i].checked == true) {"
 					. $methodRequirements['js'] . " } ";
 
-				$methodRequirements['php'] = "if(\$data['PaymentMethod'] == '$method') { " . 
+				$methodRequirements['php'] = "if(\$data['PaymentMethod'] == '$method') { " .
 					$methodRequirements['php'] . " } ";
-					
+
 				$requirements[] = $methodRequirements;
 			}
 		}
-		
+
 		return $requirements;
 	}
-	
+
 	/**
 	 * Return the payment form fields that should
 	 * be shown on the checkout order form for the
 	 * payment type. Example: for {@link DPSPayment},
 	 * this would be a set of fields to enter your
 	 * credit card details.
-	 * 
+	 *
 	 * @return FieldSet
 	 */
 	function getPaymentFormFields() {
@@ -220,24 +229,24 @@ class Payment extends DataObject {
 
 	/**
 	 * Define what fields defined in {@link Order->getPaymentFormFields()}
-	 * should be required. 
-	 * 
+	 * should be required.
+	 *
 	 * @see DPSPayment->getPaymentFormRequirements() for an example on how
 	 * this is implemented.
-	 * 
+	 *
 	 * @return array
 	 */
 	function getPaymentFormRequirements() {
 		user_error("Please implement getPaymentFormRequirements() on $this->class", E_USER_ERROR);
 	}
-	
+
 	/**
 	 * Perform payment processing for the type of
 	 * payment. For example, if this was a credit card
 	 * payment type, you would perform the data send
 	 * off to the payment gateway on this function for
 	 * your payment subclass.
-	 * 
+	 *
 	 * This is used by {@link OrderForm} when it is
 	 * submitted.
 	 *
@@ -247,28 +256,28 @@ class Payment extends DataObject {
 	function processPayment($data, $form) {
 		user_error("Please implement processPayment() on $this->class", E_USER_ERROR);
 	}
-	
+
 	function getForm($whichTest){
 		user_error("Please implement getForm() on $this->class", E_USER_ERROR);
 	}
-	
+
 	function payAsRecurring() {
 		user_error("Please implement payAsRecurring() on $this->class", E_USER_ERROR);
 	}
-	
+
 	function handleError($e){
 		$this->ExceptionError = $e->getMessage();
 		$this->write();
 	}
-	
+
 	function PaidObject(){
 		return DataObject::get_by_id($this->PaidForClass, $this->PaidForID);
-	}	
+	}
 }
 abstract class Payment_Result {
-	
+
 	protected $value;
-	
+
 	function __construct($value = null) {
 		$this->value = $value;
 	}
@@ -278,20 +287,20 @@ abstract class Payment_Result {
 	}
 
 	abstract function isSuccess();
-	
+
 	abstract function isProcessing();
-	
+
 }
 class Payment_Success extends Payment_Result {
 
 	function isSuccess() {
 		return true;
 	}
-	
+
 	function isProcessing() {
 		return false;
 	}
-	
+
 }
 class Payment_Processing extends Payment_Result {
 
@@ -302,7 +311,7 @@ class Payment_Processing extends Payment_Result {
 	function isProcessing() {
 		return true;
 	}
-	
+
 }
 class Payment_Failure extends Payment_Result {
 
